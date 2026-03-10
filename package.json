@@ -1,0 +1,22 @@
+{
+  "name": "orderdot-tea-detective",
+  "version": "1.0.0",
+  "description": "調茶員 Tea Detective — 連鎖飲料店集點 + QR Code 點餐 SaaS 平台 Demo",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.12.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.1.0"
+  }
+}
