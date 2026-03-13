@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { loadAll, saveAll, deleteAll } from "./firebase.js";
 
 // ============================================================
 // GLOBAL SHARED STATE
@@ -9,21 +10,68 @@ function useG(){return useContext(Ctx);}
 
 const STORES_INIT=[{id:1,name:"信義旗艦店",address:"台北市信義區松仁路28號",phone:"02-2345-6781",hours:"09:00-21:00",revenue:28500,orders:190,cups:312,customers:156,status:"open"},{id:2,name:"忠孝東路店",address:"台北市大安區忠孝東路四段52號",phone:"02-2345-6782",hours:"09:00-21:00",revenue:22100,orders:148,cups:245,customers:121,status:"open"},{id:3,name:"西門町店",address:"台北市萬華區漢中街51號",phone:"02-2345-6783",hours:"10:00-22:00",revenue:18900,orders:125,cups:198,customers:102,status:"open"},{id:4,name:"板橋中山店",address:"新北市板橋區中山路一段46號",phone:"02-2345-6784",hours:"09:00-21:00",revenue:15200,orders:102,cups:168,customers:89,status:"open"},{id:5,name:"中壢SOGO店",address:"桃園市中壢區元化路357號",phone:"03-4567-890",hours:"10:00-21:30",revenue:12800,orders:85,cups:132,customers:72,status:"closed"}];
 
+// --- 預設資料（第一次使用時的初始值）---
+const EVENTS_INIT=[{id:1,name:"點數兩倍送",start:"2026-03-10",end:"2026-03-16",multiplier:2,active:true}];
+const OHIST_INIT=[{id:"A001",date:"2026-03-09 14:32",store:"信義旗艦店",items:["黑糖珍珠鮮奶 x1","茉莉綠茶 x1"],total:110,points:2,status:"completed",itemCount:2},{id:"A002",date:"2026-03-07 10:15",store:"忠孝東路店",items:["紅玉鮮奶茶 x2"],total:140,points:2,status:"completed",itemCount:2}];
+const COUPONS_INIT=[{id:3,title:"消費滿$100折$10",code:"SAVE10",expires:"2026-03-15",used:true,type:"cashoff",cashoff:10,minSpend:100}];
+const AORDERS_INIT=[{id:"B-0147",time:"14:32",store:"信義旗艦店",table:"A-12",items:["黑糖珍珠鮮奶 x1","茉莉綠茶 x1"],total:110,status:"new",isBase:true},{id:"B-0146",time:"14:28",store:"信義旗艦店",table:"B-05",items:["紅玉鮮奶茶 x2"],total:140,status:"preparing",isBase:true},{id:"B-0145",time:"14:25",store:"忠孝東路店",table:"C-03",items:["百香果綠茶 x1","芋頭鮮奶 x1"],total:140,status:"preparing",isBase:true},{id:"B-0144",time:"14:20",store:"西門町店",table:"A-08",items:["櫻花莓果氣泡飲 x3"],total:240,status:"done",isBase:true}];
+const PROFILE_INIT={name:"林小茶",phone:"0912-345-678",email:"",birthday:""};
+
+// --- 存檔/讀檔：由 firebase.js 提供 loadAll / saveAll / deleteAll ---
+
 function GP({children}){
-  const[events,setEvents]=useState([{id:1,name:"點數兩倍送",start:"2026-03-10",end:"2026-03-16",multiplier:2,active:true}]);
+  const[loaded,setLoaded]=useState(false);
+  const[events,setEvents]=useState(EVENTS_INIT);
   const[stores,setStores]=useState(STORES_INIT);
   const[pts,setPts]=useState(50);
   const[totalCups,setTotalCups]=useState(6);
-  const[oHist,setOHist]=useState([{id:"A001",date:"2026-03-09 14:32",store:"信義旗艦店",items:["黑糖珍珠鮮奶 x1","茉莉綠茶 x1"],total:110,points:2,status:"completed",itemCount:2},{id:"A002",date:"2026-03-07 10:15",store:"忠孝東路店",items:["紅玉鮮奶茶 x2"],total:140,points:2,status:"completed",itemCount:2}]);
-  const[coupons,setCoupons]=useState([{id:3,title:"消費滿$100折$10",code:"SAVE10",expires:"2026-03-15",used:true,type:"cashoff",cashoff:10,minSpend:100}]);
-  const[birthdayCouponMonth,setBirthdayCouponMonth]=useState(null); // track which month we've already issued
-  const[aOrders,setAOrders]=useState([{id:"B-0147",time:"14:32",store:"信義旗艦店",table:"A-12",items:["黑糖珍珠鮮奶 x1","茉莉綠茶 x1"],total:110,status:"new",isBase:true},{id:"B-0146",time:"14:28",store:"信義旗艦店",table:"B-05",items:["紅玉鮮奶茶 x2"],total:140,status:"preparing",isBase:true},{id:"B-0145",time:"14:25",store:"忠孝東路店",table:"C-03",items:["百香果綠茶 x1","芋頭鮮奶 x1"],total:140,status:"preparing",isBase:true},{id:"B-0144",time:"14:20",store:"西門町店",table:"A-08",items:["櫻花莓果氣泡飲 x3"],total:240,status:"done",isBase:true}]);
+  const[oHist,setOHist]=useState(OHIST_INIT);
+  const[coupons,setCoupons]=useState(COUPONS_INIT);
+  const[birthdayCouponMonth,setBirthdayCouponMonth]=useState(null);
+  const[aOrders,setAOrders]=useState(AORDERS_INIT);
   const[selStore,setSelStore]=useState(1);
-  const[profile,setProfile]=useState({name:"林小茶",phone:"0912-345-678",email:"",birthday:""});
+  const[profile,setProfile]=useState(PROFILE_INIT);
   const[lastO,setLastO]=useState(null);
   const[cart,setCart]=useState([]);
   const[rewards,setRewards]=useState(RW_INIT);
   const[menuItems,setMenuItems]=useState(MENU_INIT);
+
+  // ★ 啟動時：從存檔讀取資料
+  useEffect(()=>{
+    loadAll().then(d=>{
+      if(d){
+        if(d.events)setEvents(d.events);
+        if(d.stores)setStores(d.stores);
+        if(d.pts!=null)setPts(d.pts);
+        if(d.totalCups!=null)setTotalCups(d.totalCups);
+        if(d.oHist)setOHist(d.oHist);
+        if(d.coupons)setCoupons(d.coupons);
+        if(d.aOrders)setAOrders(d.aOrders);
+        if(d.selStore!=null)setSelStore(d.selStore);
+        if(d.profile)setProfile(d.profile);
+        if(d.rewards)setRewards(d.rewards);
+        if(d.menuItems)setMenuItems(d.menuItems);
+        if(d.birthdayCouponMonth!=null)setBirthdayCouponMonth(d.birthdayCouponMonth);
+      }
+      setLoaded(true);
+    });
+  },[]);
+
+  // ★ 資料變動時：自動存檔（載入完成後才開始存）
+  useEffect(()=>{
+    if(!loaded)return;
+    saveAll({events,stores,pts,totalCups,oHist,coupons,aOrders,selStore,profile,rewards,menuItems,birthdayCouponMonth});
+  },[loaded,events,stores,pts,totalCups,oHist,coupons,aOrders,selStore,profile,rewards,menuItems,birthdayCouponMonth]);
+
+  // ★ 清除所有資料，恢復預設值
+  const resetAll=()=>{
+    deleteAll();
+    setEvents(EVENTS_INIT);setStores(STORES_INIT);setPts(50);setTotalCups(6);
+    setOHist(OHIST_INIT);setCoupons(COUPONS_INIT);setBirthdayCouponMonth(null);
+    setAOrders(AORDERS_INIT);setSelStore(1);setProfile(PROFILE_INIT);
+    setLastO(null);setCart([]);setRewards(RW_INIT);setMenuItems(MENU_INIT);
+  };
+
   const inEv=useCallback(()=>{const t=new Date().toISOString().slice(0,10);return events.some(e=>e.active&&t>=e.start&&t<=e.end);},[events]);
   const getMul=useCallback(()=>{const t=new Date().toISOString().slice(0,10);const a=events.find(e=>e.active&&t>=e.start&&t<=e.end);return a?a.multiplier:1;},[events]);
   const getEv=useCallback(()=>{const t=new Date().toISOString().slice(0,10);return events.find(e=>e.active&&t>=e.start&&t<=e.end)||null;},[events]);
@@ -67,7 +115,9 @@ function GP({children}){
       setBirthdayCouponMonth(null);
     }
   },[profile.birthday]);
-  return <Ctx.Provider value={{events,setEvents,stores,setStores,pts,setPts,totalCups,oHist,coupons,setCoupons,aOrders,setAOrders,selStore,setSelStore,profile,setProfile,lastO,cart,setCart,rewards,setRewards,menuItems,setMenuItems,inEv,getMul,getEv,placeO,redeem,useC}}>{children}</Ctx.Provider>;
+  // ★ 資料還沒讀好之前，顯示載入畫面
+  if(!loaded)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,${P},#40916c)`,fontFamily:"'Noto Sans TC',sans-serif"}}><div style={{textAlign:"center"}}><div style={{color:"#fff",fontSize:18,fontWeight:700}}>正在讀取資料...</div><div style={{marginTop:12}}><div style={{width:28,height:28,border:"3px solid rgba(255,255,255,0.2)",borderTop:"3px solid #fff",borderRadius:"50%",animation:"spin 0.8s linear infinite",margin:"0 auto"}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div></div></div>;
+  return <Ctx.Provider value={{events,setEvents,stores,setStores,pts,setPts,totalCups,oHist,coupons,setCoupons,aOrders,setAOrders,selStore,setSelStore,profile,setProfile,lastO,cart,setCart,rewards,setRewards,menuItems,setMenuItems,inEv,getMul,getEv,placeO,redeem,useC,resetAll}}>{children}</Ctx.Provider>;
 }
 
 // ============================================================
@@ -301,7 +351,7 @@ function CTrk({nav}){const{lastO,inEv,getMul,stores,selStore,profile,menuItems}=
     </div>}
   </div>;}
 
-function CPro(){const{coupons,profile,setProfile}=useG();const[ef,setEF]=useState(null);const[ev,setEV]=useState("");const[sp,setSP]=useState(null);const fl={name:"姓名",phone:"手機",email:"Email",birthday:"生日"};
+function CPro(){const{coupons,profile,setProfile,resetAll}=useG();const[ef,setEF]=useState(null);const[ev,setEV]=useState("");const[sp,setSP]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const fl={name:"姓名",phone:"手機",email:"Email",birthday:"生日"};
   if(ef)return <div style={{flex:1,background:"#fafbfc"}}><div style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #e5e7eb",background:"#fff"}}><button onClick={()=>setEF(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button><span style={{fontSize:18,fontWeight:800}}>編輯{fl[ef]}</span></div><div style={{padding:20}}><input value={ev} onChange={e=>setEV(e.target.value)} style={{width:"100%",padding:"14px 16px",borderRadius:12,border:`2px solid ${P}`,fontSize:15,outline:"none",boxSizing:"border-box"}} type={ef==="email"?"email":ef==="birthday"?"date":"text"}/><button onClick={()=>{setProfile(p=>({...p,[ef]:ev}));setEF(null);}} style={{width:"100%",marginTop:16,padding:14,borderRadius:12,border:"none",background:P,color:"#fff",fontSize:16,fontWeight:700,cursor:"pointer"}}>儲存</button></div></div>;
   if(sp==="faq")return <div style={{flex:1,background:"#fafbfc"}}><div style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #e5e7eb",background:"#fff"}}><button onClick={()=>setSP(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button><span style={{fontSize:18,fontWeight:800}}>常見問題</span></div><div style={{padding:20}}>{[{q:"如何集點？",a:"每買一杯即可累積點數。"},{q:"如何兌換？",a:"前往集點頁選擇獎勵。"}].map((f,i)=><div key={i} style={{background:"#fff",borderRadius:14,padding:16,marginBottom:10,border:"1px solid #f0f0f0"}}><div style={{fontWeight:700}}>Q: {f.q}</div><div style={{color:GR,marginTop:4}}>A: {f.a}</div></div>)}</div></div>;
   if(sp==="about")return <div style={{flex:1,background:"#fafbfc"}}><div style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #e5e7eb",background:"#fff"}}><button onClick={()=>setSP(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button><span style={{fontSize:18,fontWeight:800}}>關於{BN}</span></div><div style={{padding:20,textAlign:"center"}}><Logo size={80}/><div style={{fontSize:20,fontWeight:800,marginTop:12}}>{BN}</div><div style={{fontSize:12,color:GR}}>{BE}</div><div style={{fontSize:13,color:GR,marginTop:12,lineHeight:1.8}}>我們是茶飲界的偵探，用心調查每一片茶葉的秘密，為您調配最完美的一杯。</div></div></div>;
@@ -309,7 +359,10 @@ function CPro(){const{coupons,profile,setProfile}=useG();const[ef,setEF]=useStat
     <div style={{padding:"16px 20px"}}><div style={{fontWeight:700,marginBottom:12}}>我的票券</div>{coupons.map(c=><div key={c.id} style={{background:"#fff",borderRadius:14,padding:"14px 16px",marginBottom:8,border:c.used?"1px solid #e5e7eb":`1px solid ${AC}40`,opacity:c.used?0.5:1,position:"relative",overflow:"hidden"}}>{c.used&&<div style={{position:"absolute",top:10,right:-20,transform:"rotate(30deg)",background:"#9ca3af",color:"#fff",fontSize:10,padding:"2px 30px",fontWeight:700}}>已使用</div>}<div style={{fontWeight:700}}>{c.title}</div><div style={{fontSize:12,color:GR,marginTop:4}}>期限：{c.expires}</div></div>)}
       <div style={{marginTop:24}}><div style={{fontWeight:700,marginBottom:12}}>個人資料</div>{[{l:"姓名",v:profile.name,f:"name"},{l:"手機",v:profile.phone,f:"phone"},{l:"Email",v:profile.email||"尚未設定",f:"email"},{l:"生日",v:profile.birthday||"尚未設定",f:"birthday"}].map(i=><div key={i.f} onClick={()=>{setEV(profile[i.f]||"");setEF(i.f);}} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #f0f0f0",cursor:"pointer"}}><div><div style={{fontSize:12,color:GR}}>{i.l}</div><div style={{marginTop:2}}>{i.v}</div></div><span style={{color:"#d1d5db"}}>→</span></div>)}</div>
       <div style={{marginTop:24}}><div style={{fontWeight:700,marginBottom:12}}>設定</div>
-        {[{l:"常見問題",a:()=>setSP("faq")},{l:"關於"+BN,a:()=>setSP("about")}].map((i,idx)=><div key={idx} onClick={i.a} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #f0f0f0",cursor:"pointer"}}><span>{i.l}</span><span style={{color:"#d1d5db"}}>→</span></div>)}</div>
+        {[{l:"常見問題",a:()=>setSP("faq")},{l:"關於"+BN,a:()=>setSP("about")}].map((i,idx)=><div key={idx} onClick={i.a} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #f0f0f0",cursor:"pointer"}}><span>{i.l}</span><span style={{color:"#d1d5db"}}>→</span></div>)}
+        <div onClick={()=>setConfirmReset(true)} style={{background:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #fee2e2",cursor:"pointer"}}><span style={{color:K.danger}}>🗑 清除所有資料</span><span style={{color:"#d1d5db"}}>→</span></div>
+      </div>
+      {confirmReset&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:"#fff",borderRadius:20,padding:24,maxWidth:300,textAlign:"center"}}><div style={{fontSize:36,marginBottom:12}}>⚠️</div><div style={{fontSize:17,fontWeight:800,marginBottom:8}}>確定要清除所有資料？</div><div style={{fontSize:13,color:GR,marginBottom:20,lineHeight:1.6}}>點數、訂單、票券、個人資料等將全部恢復為初始狀態，此操作無法復原。</div><div style={{display:"flex",gap:10}}><button onClick={()=>setConfirmReset(false)} style={{flex:1,padding:12,borderRadius:12,border:"1px solid #ccc",background:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>取消</button><button onClick={()=>{resetAll();setConfirmReset(false);}} style={{flex:1,padding:12,borderRadius:12,border:"none",background:K.danger,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>確定清除</button></div></div></div>}
     </div>
   </div>;
 }
@@ -372,7 +425,8 @@ function FF({label,value,onChange,type,options,placeholder}){if(type==="select")
 function ASide({act,nav}){const its=[{id:"dashboard",i:"📊",l:"總覽"},{id:"orders",i:"📋",l:"訂單"},{id:"menu",i:"🍵",l:"菜單"},{id:"loyalty",i:"💎",l:"活動"},{id:"stores",i:"🏪",l:"門市"},{id:"members",i:"👥",l:"會員"}];
   return <div style={{background:DK,padding:"6px 0 10px",display:"flex",justifyContent:"space-around",flexShrink:0}}>{its.map(i=><button key={i.id} onClick={()=>nav(i.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"4px 8px"}}><span style={{fontSize:18,filter:act===i.id?"none":"grayscale(1)",opacity:act===i.id?1:0.5}}>{i.i}</span><span style={{fontSize:9,fontWeight:act===i.id?700:400,color:act===i.id?"#fff":"rgba(255,255,255,0.5)"}}>{i.l}</span></button>)}</div>;}
 
-function ADash(){const{stores,inEv,getMul,aOrders,menuItems}=useG();const mul=getMul();const ie=inEv();
+function ADash(){const{stores,inEv,getMul,aOrders,menuItems,resetAll}=useG();const mul=getMul();const ie=inEv();
+  const[confirmReset,setConfirmReset]=useState(false);
   const tR=stores.reduce((s,x)=>s+x.revenue,0);const tO=stores.reduce((s,x)=>s+x.orders,0);const tC=stores.reduce((s,x)=>s+x.customers,0);const tCups=stores.reduce((s,x)=>s+x.cups,0);const tP=tCups*mul;
   // Yesterday comparison - fixed base, so percentage changes as today's numbers grow
   const yR=YESTERDAY.revenue;const yO=YESTERDAY.orders;const yC=YESTERDAY.customers;const yCups=920;const yP=yCups*mul;
@@ -429,7 +483,8 @@ function ADash(){const{stores,inEv,getMul,aOrders,menuItems}=useG();const mul=ge
       <button onClick={()=>setShowReport(false)} style={{width:"100%",padding:10,borderRadius:10,border:"none",background:P,color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13,marginTop:12}}>關閉</button>
     </Mod>}
     {/* Header */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div><h1 style={{fontSize:18,fontWeight:800,margin:0}}>數據總覽</h1><p style={{fontSize:11,color:GR,margin:"2px 0 0"}}>全品牌（{stores.length}間）{ie&&<span style={{color:AC,fontWeight:700,marginLeft:6}}>🔥 {mul}倍送中</span>}</p></div><button onClick={()=>setShowReport(true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:P,color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer"}}>📊 日報表</button></div>
+    {confirmReset&&<Mod title="清除所有資料" onClose={()=>setConfirmReset(false)} width={340}><div style={{textAlign:"center"}}><div style={{fontSize:36,marginBottom:12}}>⚠️</div><div style={{fontSize:14,color:GR,marginBottom:20,lineHeight:1.6}}>點數、訂單、票券、菜單、門市資料等將全部恢復為初始狀態，此操作無法復原。</div><div style={{display:"flex",gap:10}}><button onClick={()=>setConfirmReset(false)} style={{flex:1,padding:12,borderRadius:12,border:"1px solid #ccc",background:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>取消</button><button onClick={()=>{resetAll();setConfirmReset(false);}} style={{flex:1,padding:12,borderRadius:12,border:"none",background:K.danger,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>確定清除</button></div></div></Mod>}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div><h1 style={{fontSize:18,fontWeight:800,margin:0}}>數據總覽</h1><p style={{fontSize:11,color:GR,margin:"2px 0 0"}}>全品牌（{stores.length}間）{ie&&<span style={{color:AC,fontWeight:700,marginLeft:6}}>🔥 {mul}倍送中</span>}</p></div><div style={{display:"flex",gap:6}}><button onClick={()=>setConfirmReset(true)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${K.danger}`,background:"#fff",color:K.danger,fontSize:11,fontWeight:600,cursor:"pointer"}}>🗑 重置</button><button onClick={()=>setShowReport(true)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:P,color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer"}}>📊 日報表</button></div></div>
     {/* KPI Cards - 2x2 grid on mobile */}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>{[{i:"💰",l:"今日營收",v:`$${tR.toLocaleString()}`,y:yR},{i:"📦",l:"訂單",v:tO.toLocaleString(),y:yO},{i:"👤",l:"來客",v:tC.toLocaleString(),y:yC},{i:"⭐",l:`點數${ie?" (x"+mul+")":""}`,v:tP.toLocaleString(),y:yP}].map((s,i)=><div key={i} style={{background:"#fff",borderRadius:10,padding:12,border:`1px solid ${K.border}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:14}}>{s.i}</span><span style={{fontSize:9,fontWeight:700,color:isUp(parseInt(s.v.replace(/[$,]/g,"")),s.y)?K.success:K.danger,background:isUp(parseInt(s.v.replace(/[$,]/g,"")),s.y)?"#d1fae5":"#fee2e2",padding:"2px 6px",borderRadius:100}}>{pct(parseInt(s.v.replace(/[$,]/g,"")),s.y)}</span></div><div style={{fontSize:20,fontWeight:800,marginTop:4}}>{s.v}</div><div style={{fontSize:10,color:GR,marginTop:2}}>{s.l}</div></div>)}</div>
     {/* Weekly Revenue - full width */}
